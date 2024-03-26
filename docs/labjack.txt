@@ -1,0 +1,15 @@
+LabJack T4
+
+
+
+
+
+LJ Tick relay driver
+
+https://labjack.com/pages/support?doc=%2Fdatasheets%2Faccessories%2Fljtick-relaydriver-datasheet%2F
+
+This is the small screw terminal module that translates between the 3.3V logic of the T7 and the optoisolated relay logic used by the motor driver.
+
+
+
+
