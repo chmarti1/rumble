@@ -14,8 +14,21 @@ class Motor:
     """Motor interface class
     
     M = Motor(handle)
-    
-After initializing an empty motor object, the motor is intialized by
+
+A stepper motor interface is commanded to move one count at a time by
+a series of pulses on the "pulse pin."  The direction of rotation is set
+by the value on a separate "direction pin."  This motor class tracks the
+motor position with a "counts" register, and relates it to a position 
+with physical units using the calibration registers (cal_slope, cal_zero,
+and cal_units).
+
+This uses a LabJack T-series to generate the pulse train to command motor
+motion.  There are two methods that can be used to set up the motor 
+interface:
+
+MANUALLY FROM THE PYTHON TERMINAL
+
+After declaration an empty motor object, the motor is intialized by
 setting the pulse frequency using the .set_clock() method.
 
     M.set_clock(roll, divisor)
@@ -28,9 +41,22 @@ assigning the motor's pins.
     M.set_pins(dir_pin, pulse_pin, home_pin, invert)
         OR
     M.set_pins(dir_pin, pulse_pin)
-    
+
 If the default motor direction is opposite the desired positive
 direction, the invert keyword may be set to True.
+
+AUTOMATICALLY FROM A CONFIGURATION FILE
+
+Configuration files are JSON-format files that define all of the 
+relevant configuration parameters.
+
+    M.load(filename)
+    
+A template file can be created for editing by evoking the save() method.
+
+    M.save(filename)
+
+CONFIGURATION PARAMETERS
     
 The motor object has the following attributes, all of which should be
 regarded as READ ONLY.  DO NOT ATTEMPT TO WRITE TO THESE ATTRIBUTES.
@@ -153,7 +179,7 @@ Writes a text file with configuration parameters for the motor
                 'lim_upper': self.lim_upper,
                 'lim_lower': self.lim_lower
             }
-            json.dump(config, indent=4)
+            json.dump(config, ff, indent=4)
         
     def load(self, filename):
         """Load the motor configuration and calibration from a file
@@ -332,12 +358,12 @@ This function assigns values to the following instance attributes:
         ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_INDEX', 2)     # 
         ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_CONFIG_B', 0)      # Transition low->high at time 0
         ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_CONFIG_A', roll//2)   # Transition high->low at time 5000
-        ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_CONFIG_C', 1)  # Do not move yet
+        ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_CONFIG_C', 1)  # Move 1 step - config fails otherwise
         # Enable the EF channel
         ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}', 0)              # Force the pin low
         ljm.eWriteName(self.handle, f'DIO{self.pulse_pin}_EF_ENABLE', 1)    # Go
         
-        # Undo the step
+        # Undo the step moved during configuration
         ljm.eWriteName(self.handle, self.dir_reg, 1)
         ljm.eWriteName(self.handle, self.pulse_reg, 1)
         
@@ -575,7 +601,7 @@ channels.
     polar_pulse_pin = 6
     polar_dir_pin = 4
     polar_home_pin = 8
-    pulse_rate_hz = 1000
+    pulse_rate_hz = 50
 
     # Open the connection to the device.
     # 440012418 is the serial number.
@@ -584,14 +610,16 @@ channels.
 
     # Set up the motor control objects
     polarizer = Motor(h)
-    polarizer.set_clock_hz(pulse_rate_hz)
-    polarizer.set_pins(polar_dir_pin, polar_pulse_pin, polar_home_pin)
+    polarizer.load('polar.conf')
+    #polarizer.set_clock_hz(pulse_rate_hz)
+    #polarizer.set_pins(polar_dir_pin, polar_pulse_pin, polar_home_pin)
         
     monochrometer = Motor(h)
+    monochrometer.load('mono.conf')
     # The clock is shared for all extended features.  There is no need
     # to set the clock again.
     # monochrometer.set_clock_hz(pulse_rate_hz)
-    monochrometer.set_pins(mono_dir_pin, mono_pulse_pin, polar_home_pin)
+    #monochrometer.set_pins(mono_dir_pin, mono_pulse_pin, mono_home_pin)
 
     return polarizer, monochrometer
     
@@ -599,6 +627,10 @@ channels.
 
 
 if __name__ == '__main__':
+
+    # Magic angle constant
+    # Set to 45 for a junk test value
+    POL_MA = 45.
 
     # Create the master interface window
     root = tk.Tk()
@@ -630,13 +662,16 @@ if __name__ == '__main__':
         monochrometer.increment_cal(value)
 
     def callback_polar_vert(*args):
+        print(f'Setting the polarizer to vertical (0 deg).')
         polarizer.go_cal(0.)
 
     def callback_polar_hor(*args):
+        print('Setting the polarizer to horizontal (90 deg).')
         polarizer.go_cal(90.)
 
     def callback_polar_ma(*args):
-        polarizer.go_cal(45.)
+        print(f'Setting the polarizer to the magic angle ({POL_MA} deg).')
+        polarizer.go_cal(POL_MA)
 
     def callback_polar_go(*args):
         target = polar_target_deg.get()
@@ -690,6 +725,6 @@ if __name__ == '__main__':
     #
     # Initialize the motor objects
     #
-    monochrometer, polarizer = global_init()
+    polarizer, monochrometer = global_init()
     
     root.mainloop()
