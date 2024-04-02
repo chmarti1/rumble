@@ -15,21 +15,33 @@ class Motor:
     
     M = Motor(handle)
 
-A stepper motor interface is commanded to move one count at a time by
-a series of pulses on the "pulse pin."  The direction of rotation is set
-by the value on a separate "direction pin."  This motor class tracks the
-motor position with a "counts" register, and relates it to a position 
-with physical units using the calibration registers (cal_slope, cal_zero,
-and cal_units).
+A motor object is initialized with a handle; just an integer used by
+the LJM LabJack driver to identify the open device.  See the 
+global_init() function in this file for an example of how to open a 
+connection to the LabJack device and pass it to the motor instances.
 
-This uses a LabJack T-series to generate the pulse train to command motor
-motion.  There are two methods that can be used to set up the motor 
-interface:
+A stepper motor interface is commanded to move one count at a time by
+a series of pulses on the "pulse pin."  For example, a square wave forms
+a continuous series of pulses that would result in constant motor speed.
+The direction of rotation is commanded by the value on a separate 
+"direction pin."  The motor class tracks the motor's current position
+with its (counts) attribute, and motion with a logical "true" on the 
+direction pin causes the (counts) attribute to increase, while a logical
+"false" causes it to decrease.  This behavior can be reversed by setting
+the (invert) attribute to True.
+
+Motors can optionally be configured with a "home_pin", which changes
+when the motor arrives at a home location.  The home() method 
+iteratively advances the motor position until the value on the home pin 
+changes.  At this position, the motor is said to be "homed."  Usually
+this is physically accomplished by a photo interrupter or a limit switch.
 
 MANUALLY FROM THE PYTHON TERMINAL
 
 After declaration an empty motor object, the motor is intialized by
-setting the pulse frequency using the .set_clock() method.
+setting the pulse frequency using the .set_clock() method.  This 
+determines the speed at which the motors rotate.  See the set_clock() 
+documentation for more detail.
 
     M.set_clock(roll, divisor)
         OR
@@ -47,8 +59,10 @@ direction, the invert keyword may be set to True.
 
 AUTOMATICALLY FROM A CONFIGURATION FILE
 
-Configuration files are JSON-format files that define all of the 
-relevant configuration parameters.
+It will be very unusual for motor configuration to change, so parameters
+can be saved in confugration files.  These are JSON-format human-readable
+(and editable) text files that define all of the relevant configuration
+parameters.
 
     M.load(filename)
     
@@ -59,7 +73,8 @@ A template file can be created for editing by evoking the save() method.
 CONFIGURATION PARAMETERS
     
 The motor object has the following attributes, all of which should be
-regarded as READ ONLY.  DO NOT ATTEMPT TO WRITE TO THESE ATTRIBUTES.
+regarded as READ ONLY unless otherwise noted below.  DO NOT ATTEMPT TO 
+WRITE TO THESE ATTRIBUTES; it can cause undefined behavior.
 
 * POSITIONING *
     counts      The current motor position in pulse counts
@@ -104,11 +119,14 @@ help for each.
     go_cal( target )
     increment( value )
     increment_cal( value )
+    home( increment )
 * POSITIONING STATUS *
     counts = get()
     position = get_cal()
+    set( value )
+    set_cal( value )
 
-** PHYSICAL INTERFACE **
+PHYSICAL INTERFACE
 
 When motion is commanded, a series of pulses is generated at the pulse_pin.
 Pulses are at a frequency set by set_clock() or set_clock_hz(), and with
@@ -557,6 +575,18 @@ angle or linear position.
 """
         return self.cal_slope*(self.counts - self.cal_zero)
         
+    def set(self, value):
+        """Assign the current position in counts
+    M.set(counts)
+"""
+        self.counts = int(value)
+        
+    def set_cal(self, value):
+        """Assign the current position in calibrated units
+    M.set_cal(position)
+"""
+        self.set(value / self.cal_slope + self.cal_zero)
+        
     def set_cal(self, zero, slope, units):
         """Set the motor's calibration units
     M.set_cal(zero, slope, units)
@@ -572,7 +602,9 @@ zero    The motor's calibrated position is zero when counts == zero.
 slope   The relationship between the motor's position in pulse counts 
         and the calibrated position.  For example, a 400 pulse-per-
         rotation motor would have a slope=(360/400) for a calibration in
-        degrees.  The slope MUST BE POSITIVE.
+        degrees.  The slope MUST BE POSITIVE.  To reverse the positive
+        axis, use the invert=True option when assigning the set_pins()
+        method.
         
 units   This is the units string used to express the units.
 """
@@ -580,7 +612,7 @@ units   This is the units string used to express the units.
             raise Exception('The slope MUST be a positive (non-zero) number.')
         self.cal_zero = zero
         self.cal_slope = slope
-        self.cal_units = units
+        self.cal_units = str(units)
 
 
 def global_init():
